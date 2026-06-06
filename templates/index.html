@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>YT Comment Sentiment Checker</title>
+  <style>
+    body{
+      font-family: Arial, sans-serif;
+      background:#ffffff;
+      margin:0;
+      padding:0;
+      color:#111;
+    }
+    .wrap{
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 20px;
+    }
+    .box{
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      padding: 22px;
+    }
+    h1{
+      margin: 0 0 10px 0;
+      font-size: 22px;
+      font-weight: 700;
+    }
+    .sub{
+      margin: 0 0 18px 0;
+      color:#444;
+      font-size: 14px;
+    }
+    label{
+      display:block;
+      font-size: 13px;
+      margin: 12px 0 6px;
+      color:#333;
+    }
+    input, select{
+      width:100%;
+      padding:10px;
+      border:1px solid #bbb;
+      border-radius:6px;
+      outline:none;
+      font-size:14px;
+    }
+    input:focus, select:focus{
+      border-color:#666;
+    }
+    .row{
+      display:flex;
+      gap:12px;
+      flex-wrap:wrap;
+    }
+    .col{
+      flex:1;
+      min-width: 220px;
+    }
+    .btn{
+      margin-top: 14px;
+      width:100%;
+      padding:10px;
+      border:1px solid #111;
+      background:#111;
+      color:#fff;
+      border-radius:6px;
+      cursor:pointer;
+      font-size:15px;
+    }
+    .btn:disabled{
+      opacity:0.6;
+      cursor:not-allowed;
+    }
+    .msg{
+      margin-top: 14px;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #ddd;
+      background:#fafafa;
+      font-size: 14px;
+      display:none;
+    }
+    .stats{
+      margin-top: 16px;
+      padding: 12px;
+      border:1px solid #ddd;
+      border-radius: 8px;
+      background:#fff;
+    }
+    .stats b{ font-weight: 700; }
+    table{
+      width:100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+    th, td{
+      border:1px solid #ddd;
+      padding:8px;
+      vertical-align: top;
+    }
+    th{
+      background:#f4f4f4;
+      text-align:left;
+    }
+    .pill{
+      display:inline-block;
+      padding:2px 8px;
+      border-radius:999px;
+      border:1px solid #bbb;
+      font-size:12px;
+      background:#fff;
+    }
+    .muted{
+      color:#666;
+      font-size:12px;
+    }
+    footer{
+      margin-top: 16px;
+      font-size: 12px;
+      color:#666;
+      text-align:center;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="wrap">
+    <div class="box">
+      <h1>YouTube Comment Sentiment Checker</h1>
+      <p class="sub">Paste a YouTube link and analyze 5 recent comments (Positive / Neutral / Negative).</p>
+
+      <label for="url">YouTube Video Link</label>
+      <input id="url" type="text" placeholder="https://www.youtube.com/watch?v=VIDEO_ID" />
+
+      <div class="row">
+        <div class="col">
+          <label for="count">No. of Comments</label>
+          <select id="count">
+            <option value="5" selected>5 (default)</option>
+            <option value="10">10</option>
+            <option value="15">15</option>
+            <option value="20">20</option>
+          </select>
+          <div class="muted">Note: API may limit results depending on the video.</div>
+        </div>
+        <div class="col">
+          <label for="api">API Endpoint</label>
+          <input id="api" type="text" value="http://127.0.0.1:8000/analyze_youtube/" />
+          <div class="muted">Change only if backend runs on a different address.</div>
+        </div>
+      </div>
+
+      <button id="btn" class="btn" onclick="analyze()">Analyze Comments</button>
+
+      <div id="msg" class="msg"></div>
+
+      <div id="stats" class="stats" style="display:none;"></div>
+      <div id="results"></div>
+    </div>
+
+    <footer>Lab Project • FastAPI + YouTube Data API + TextBlob</footer>
+  </div>
+
+<script>
+function showMsg(text){
+  const msg = document.getElementById("msg");
+  msg.style.display = "block";
+  msg.innerText = text;
+}
+
+function clearOutput(){
+  document.getElementById("stats").style.display = "none";
+  document.getElementById("stats").innerHTML = "";
+  document.getElementById("results").innerHTML = "";
+  document.getElementById("msg").style.display = "none";
+  document.getElementById("msg").innerText = "";
+}
+
+async function analyze(){
+  const url = document.getElementById("url").value.trim();
+  const maxComments = parseInt(document.getElementById("count").value, 10);
+  const api = document.getElementById("api").value.trim();
+
+  clearOutput();
+
+  if(!url){
+    showMsg("Please paste a YouTube link first.");
+    return;
+  }
+
+  const btn = document.getElementById("btn");
+  btn.disabled = true;
+  btn.innerText = "Analyzing...";
+
+  try{
+    const res = await fetch(api, {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ url: url, max_comments: maxComments })
+    });
+
+    const data = await res.json();
+
+    if(!res.ok){
+      showMsg(data.detail ? data.detail : "API error occurred.");
+      return;
+    }
+
+    if(data.detail){
+      showMsg(data.detail);
+      return;
+    }
+
+    const s = data.sentiment_counts || {Positive:0, Neutral:0, Negative:0};
+
+    const stats = document.getElementById("stats");
+    stats.style.display = "block";
+    stats.innerHTML = `
+      <div><b>Video ID:</b> ${data.video_id}</div>
+      <div style="margin-top:6px;">
+        <span class="pill">Positive: ${s.Positive}</span>
+        <span class="pill">Neutral: ${s.Neutral}</span>
+        <span class="pill">Negative: ${s.Negative}</span>
+        <span class="pill">Total: ${data.total_comments}</span>
+      </div>
+    `;
+
+    if(!data.results || data.results.length === 0){
+      showMsg("No comments found (or comments are disabled).");
+      return;
+    }
+
+    let table = `
+      <table>
+        <thead>
+          <tr>
+            <th>Author</th>
+            <th>Comment</th>
+            <th>Sentiment</th>
+            <th>Polarity</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+
+    data.results.forEach(r => {
+      const pol = (typeof r.polarity === "number") ? r.polarity.toFixed(3) : "0.000";
+      table += `
+        <tr>
+          <td>${escapeHtml(r.author || "")}</td>
+          <td>${escapeHtml(r.text || "")}</td>
+          <td>${escapeHtml(r.sentiment || "")}</td>
+          <td>${pol}</td>
+        </tr>
+      `;
+    });
+
+    table += `</tbody></table>`;
+    document.getElementById("results").innerHTML = table;
+
+  } catch(e){
+    console.error(e);
+    showMsg("Could not reach backend. Make sure Uvicorn is running on port 8000.");
+  } finally{
+    btn.disabled = false;
+    btn.innerText = "Analyze Comments";
+  }
+}
+
+// basic HTML escaping to avoid layout break on weird comments
+function escapeHtml(str){
+  return String(str)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+</script>
+
+</body>
+</html>
